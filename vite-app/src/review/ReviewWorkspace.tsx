@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import {
-  ArrowUpRight,
   Check,
   ChevronRight,
   CircleAlert,
@@ -13,7 +12,7 @@ import {
 } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
-import { Button, buttonVariants } from "@/components/ui/button"
+import { Button } from "@/components/ui/button"
 import {
   Card,
   CardAction,
@@ -47,6 +46,7 @@ import {
 } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
+import { ReportPhoto } from "./ReportPhoto"
 import {
   canReview,
   dateLabel,
@@ -767,18 +767,12 @@ function RecordTable({
                 </TableCell>
                 <TableCell className="text-center">
                   {url ? (
-                    <a
-                      className={buttonVariants({
-                        variant: "ghost",
-                        size: "icon-sm",
-                      })}
-                      href={url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      aria-label={`Открыть фото: ${record.waste}`}
-                    >
-                      <ArrowUpRight aria-hidden="true" />
-                    </a>
+                    <ReportPhoto
+                      key={url}
+                      url={url}
+                      waste={record.waste}
+                      date={record.date}
+                    />
                   ) : (
                     "—"
                   )}
