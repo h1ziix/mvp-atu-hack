@@ -1,0 +1,13 @@
+project_id = "atu-ecotrack"
+
+[functions.smart-input]
+enabled = true
+# The app uses the specification's custom authenticate_user RPC, not Supabase Auth JWTs.
+# This function validates its own signed, expiring session on every AI request.
+verify_jwt = false
+entrypoint = "./functions/smart-input/index.ts"
+
+[functions.atu-ai]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/atu-ai/index.ts"
