@@ -1,22 +1,14 @@
 import { useCallback, useState, type FormEvent } from "react"
+import { ArrowRight, Eye, EyeOff, Leaf, LogOut, MapPin } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
-import { monthRange, currentMonth } from "@/reporting/model"
+import { Skeleton } from "@/components/ui/skeleton"
 import { useReportingQuery } from "@/reporting/useReportingQuery"
-import { dateLabel, numberLabel, statusLabel } from "@/review/model"
-import { unitLabel } from "@/reports/model"
-import { today, type Operations, type Point } from "./model"
+import type { Operations, Point } from "./model"
+import { PointEntries } from "./PointEntries"
 
 export default function PointForm({
   operations,
@@ -38,18 +30,111 @@ export default function PointForm({
   }, [operations, pointToken])
   const { result, reload } = useReportingQuery(load)
   const [token, setToken] = useState("")
+  const point = result.state === "ready" ? result.data : null
+
+  return (
+    <main className="min-h-svh bg-[#f2f4fa] px-3 pt-3 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-6 sm:pt-8 dark:bg-background">
+      <div
+        className={token ? "mx-auto max-w-xl space-y-4" : "mx-auto max-w-md"}
+      >
+        <header
+          className={
+            token
+              ? "rounded-3xl bg-[#191b36] px-5 py-4 text-white"
+              : "rounded-3xl bg-[#191b36] px-6 pt-6 pb-12 text-white"
+          }
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 text-sm font-semibold">
+              <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#d9dcff] text-[#242e7a]">
+                <Leaf className="size-[18px]" aria-hidden="true" />
+              </span>
+              АТУ · Экомониторинг
+            </div>
+            {token && (
+              <Button
+                type="button"
+                variant="ghost"
+                className="h-11 gap-2 px-2.5 text-sm text-white hover:bg-white/10 hover:text-white"
+                onClick={() => {
+                  onExit(token)
+                  setToken("")
+                }}
+              >
+                <LogOut aria-hidden="true" /> Выйти
+              </Button>
+            )}
+          </div>
+          <h1 className="mt-4 text-xl leading-tight font-semibold tracking-tight sm:text-2xl">
+            {point?.organization.name_ru ?? "Форма точки АТУ"}
+          </h1>
+          {point?.organization.building_ru && (
+            <p className="mt-2 flex items-start gap-2 text-sm text-[#cbd0eb]">
+              <MapPin className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+              {point.organization.building_ru}
+            </p>
+          )}
+        </header>
+        {result.state === "loading" && (
+          <Card className="relative mx-2 -mt-7 rounded-2xl">
+            <CardContent role="status" aria-label="Загрузка точки">
+              <Skeleton className="h-32 w-full" />
+            </CardContent>
+          </Card>
+        )}
+        {result.state === "error" && (
+          <Card className="relative mx-2 -mt-7 rounded-2xl">
+            <CardContent className="space-y-3">
+              <Alert variant="destructive">
+                <AlertDescription>{result.message}</AlertDescription>
+              </Alert>
+              <Button
+                type="button"
+                className="h-11 px-4 text-sm"
+                onClick={reload}
+              >
+                Повторить
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+        {operations &&
+          point &&
+          (token ? (
+            <PointEntries operations={operations} point={point} token={token} />
+          ) : (
+            <PointSignIn
+              operations={operations}
+              point={point}
+              onSignIn={setToken}
+            />
+          ))}
+      </div>
+    </main>
+  )
+}
+
+function PointSignIn({
+  operations,
+  point,
+  onSignIn,
+}: {
+  operations: Operations
+  point: Point
+  onSignIn: (token: string) => void
+}) {
   const [error, setError] = useState("")
   const [busy, setBusy] = useState(false)
-  const point = result.state === "ready" ? result.data : null
+  const [showPassword, setShowPassword] = useState(false)
 
   async function login(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!operations || !point || busy) return
+    if (busy) return
     const form = new FormData(event.currentTarget)
     setBusy(true)
     setError("")
     try {
-      setToken(
+      onSignIn(
         await operations.pointLogin(
           point,
           String(form.get("email")).trim(),
@@ -64,322 +149,78 @@ export default function PointForm({
   }
 
   return (
-    <main className="min-h-svh bg-muted/30 px-4 py-6">
-      <div className="mx-auto max-w-xl space-y-4">
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              <h1 className="text-xl font-semibold">
-                {point?.organization.name_ru ?? "Форма точки АТУ"}
-              </h1>
-            </CardTitle>
-            {point && (
-              <CardDescription>
-                {point.organization.building_ru}
-              </CardDescription>
-            )}
-          </CardHeader>
-          <CardContent>
-            {result.state === "loading" && <p role="status">Загрузка точки…</p>}
-            {result.state === "error" && (
-              <div className="space-y-3">
-                <Alert variant="destructive">
-                  <AlertDescription>{result.message}</AlertDescription>
-                </Alert>
-                <Button type="button" variant="outline" onClick={reload}>
-                  Повторить
-                </Button>
-              </div>
-            )}
-            {point &&
-              (token ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    onExit(token)
-                    setToken("")
-                  }}
-                >
-                  Выйти
-                </Button>
-              ) : (
-                <form className="space-y-3" onSubmit={login}>
-                  <Field>
-                    <FieldLabel htmlFor="point-email">Рабочая почта</FieldLabel>
-                    <Input
-                      id="point-email"
-                      name="email"
-                      type="email"
-                      autoComplete="username"
-                      required
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="point-password">Пароль</FieldLabel>
-                    <Input
-                      id="point-password"
-                      name="password"
-                      type="password"
-                      autoComplete="current-password"
-                      required
-                    />
-                  </Field>
-                  {error && (
-                    <Alert variant="destructive">
-                      <AlertDescription>{error}</AlertDescription>
-                    </Alert>
-                  )}
-                  <Button type="submit" disabled={busy}>
-                    {busy ? "Входим…" : "Войти в форму"}
-                  </Button>
-                </form>
-              ))}
-          </CardContent>
-        </Card>
-        {operations && point && token && (
-          <PointEntries operations={operations} point={point} token={token} />
-        )}
-      </div>
-    </main>
-  )
-}
-
-function PointEntries({
-  operations,
-  point,
-  token,
-}: {
-  operations: Operations
-  point: Point
-  token: string
-}) {
-  const [month, setMonth] = useState(currentMonth)
-  const [wasteId, setWasteId] = useState(point.wastes[0]?.id ?? "")
-  const [busy, setBusy] = useState(false)
-  const [message, setMessage] = useState("")
-  const [error, setError] = useState("")
-  const load = useCallback(
-    () => operations.pointMonth(point, month),
-    [operations, point, month]
-  )
-  const { result, reload } = useReportingQuery(load)
-  const data = result.state === "ready" ? result.data : null
-  const canEdit = data?.status === "draft" || data?.status === "returned"
-  const waste = point.wastes.find(({ id }) => id === wasteId)
-  const range = monthRange(month)!
-  const lastDate = range.to < today() ? range.to : today()
-
-  async function run(action: () => Promise<void>, notice: string) {
-    if (busy) return
-    setBusy(true)
-    setMessage("")
-    setError("")
-    try {
-      await action()
-      setMessage(notice)
-      reload()
-    } catch (reason) {
-      setError(
-        reason instanceof Error ? reason.message : "Не удалось сохранить."
-      )
-      reload()
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  function add(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const form = event.currentTarget
-    const values = new FormData(form)
-    void run(async () => {
-      await operations.pointAdd(token, point, {
-        date: String(values.get("date")),
-        waste_id: wasteId,
-        disposal_id: String(values.get("disposal")),
-        amount: Number(values.get("amount")),
-      })
-      const amount = form.elements.namedItem("amount")
-      if (amount instanceof HTMLInputElement) amount.value = ""
-    }, "Запись добавлена.")
-  }
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>
-          <h2>Учёт отходов</h2>
-        </CardTitle>
+    <Card className="relative mx-2 -mt-7 rounded-2xl shadow-sm [--card-spacing:--spacing(5)]">
+      <CardHeader className="gap-1.5">
+        <h2 className="text-2xl leading-tight font-semibold tracking-tight">
+          Вход в форму
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          Используйте рабочую почту, привязанную к этой точке.
+        </p>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="flex flex-wrap items-end gap-3">
-          <Field className="w-auto">
-            <FieldLabel htmlFor="point-month">Отчётный месяц</FieldLabel>
+      <CardContent>
+        <form className="space-y-4" onSubmit={login} aria-busy={busy}>
+          <Field className="gap-1.5">
+            <FieldLabel className="text-sm" htmlFor="point-email">
+              Рабочая почта
+            </FieldLabel>
             <Input
-              id="point-month"
-              type="month"
-              value={month}
-              max={currentMonth()}
-              disabled={busy}
-              onChange={(event) => {
-                if (monthRange(event.currentTarget.value)) {
-                  setMonth(event.currentTarget.value)
-                  setMessage("")
-                  setError("")
-                }
-              }}
+              id="point-email"
+              name="email"
+              type="email"
+              autoComplete="username"
+              autoCapitalize="none"
+              spellCheck={false}
+              placeholder="name@atu.edu.kz"
+              className="h-12 rounded-xl px-3 text-base md:text-base"
+              required
             />
           </Field>
-          {data && <Badge variant="outline">{statusLabel(data.status)}</Badge>}
-        </div>
-        {result.state === "loading" && <p role="status">Загрузка записей…</p>}
-        {result.state === "error" && (
-          <Alert variant="destructive">
-            <AlertDescription>{result.message}</AlertDescription>
-            <Button type="button" variant="outline" onClick={reload}>
-              Повторить
-            </Button>
-          </Alert>
-        )}
-        {data?.comment && (
-          <Alert role="note">
-            <AlertDescription>
-              Комментарий проверяющего: {data.comment}
-            </AlertDescription>
-          </Alert>
-        )}
-        {canEdit &&
-          waste &&
-          point.disposals.length > 0 &&
-          lastDate >= range.from && (
-            <form
-              key={month}
-              className="grid gap-3 sm:grid-cols-2"
-              onSubmit={add}
-            >
-              <Field>
-                <FieldLabel htmlFor="point-date">Дата взвешивания</FieldLabel>
-                <Input
-                  id="point-date"
-                  name="date"
-                  type="date"
-                  min={range.from}
-                  max={lastDate}
-                  defaultValue={lastDate}
-                  required
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="point-waste">Вид отходов</FieldLabel>
-                <NativeSelect
-                  id="point-waste"
-                  className="w-full"
-                  value={wasteId}
-                  onChange={(event) => setWasteId(event.currentTarget.value)}
-                >
-                  {point.wastes.map((item) => (
-                    <NativeSelectOption key={item.id} value={item.id}>
-                      {item.name_ru}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="point-amount">
-                  Количество, {unitLabel(waste.unit)}
-                </FieldLabel>
-                <Input
-                  id="point-amount"
-                  name="amount"
-                  type="number"
-                  inputMode="decimal"
-                  min="0.01"
-                  max="2000"
-                  step="0.01"
-                  required
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="point-disposal">
-                  Способ утилизации
-                </FieldLabel>
-                <NativeSelect
-                  id="point-disposal"
-                  name="disposal"
-                  className="w-full"
-                  defaultValue=""
-                  required
-                >
-                  <NativeSelectOption value="" disabled>
-                    Выберите способ
-                  </NativeSelectOption>
-                  {point.disposals.map((item) => (
-                    <NativeSelectOption key={item.id} value={item.id}>
-                      {item.name_ru}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
-              </Field>
+          <Field className="gap-1.5">
+            <FieldLabel className="text-sm" htmlFor="point-password">
+              Пароль
+            </FieldLabel>
+            <div className="relative">
+              <Input
+                id="point-password"
+                name="password"
+                type={showPassword ? "text" : "password"}
+                autoComplete="current-password"
+                autoCapitalize="none"
+                spellCheck={false}
+                className="h-12 rounded-xl pr-12 pl-3 text-base md:text-base"
+                required
+              />
               <Button
-                type="submit"
-                className="justify-self-start"
-                disabled={busy}
+                type="button"
+                size="icon-lg"
+                variant="ghost"
+                className="absolute inset-y-0 right-0.5 my-auto size-11 rounded-lg text-muted-foreground"
+                aria-label={showPassword ? "Скрыть пароль" : "Показать пароль"}
+                onClick={() => setShowPassword(!showPassword)}
               >
-                Добавить запись
+                {showPassword ? (
+                  <EyeOff aria-hidden="true" />
+                ) : (
+                  <Eye aria-hidden="true" />
+                )}
               </Button>
-            </form>
+            </div>
+          </Field>
+          {error && (
+            <Alert variant="destructive">
+              <AlertDescription className="text-sm">{error}</AlertDescription>
+            </Alert>
           )}
-        {data && !data.records.length && (
-          <p className="text-muted-foreground">
-            За этот месяц записей пока нет.
-          </p>
-        )}
-        {!!data?.records.length && (
-          <ul className="divide-y rounded-md border">
-            {data.records.map((item) => (
-              <li
-                key={item.id}
-                className="flex flex-wrap items-center justify-between gap-2 px-3 py-2"
-              >
-                <span>
-                  {item.waste_name_ru}{" "}
-                  <span className="text-muted-foreground">
-                    · {dateLabel(item.record_date)}
-                  </span>
-                </span>
-                <span className="font-medium">
-                  {numberLabel(Number(item.amount), ` ${unitLabel(item.unit)}`)}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-        {canEdit && !!data?.records.length && (
           <Button
-            type="button"
-            variant="outline"
+            type="submit"
             disabled={busy}
-            onClick={() =>
-              void run(
-                () => operations.pointSubmit(token, point, month),
-                "Отчёт отправлен на проверку."
-              )
-            }
+            className="h-12 w-full gap-2 rounded-xl text-base"
           >
-            Отправить на проверку
+            {busy ? "Входим…" : "Войти в форму"}
+            <ArrowRight aria-hidden="true" />
           </Button>
-        )}
-        {error && (
-          <Alert variant="destructive">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-        {message && (
-          <p role="status" className="text-green-700">
-            {message}
-          </p>
-        )}
+        </form>
       </CardContent>
     </Card>
   )
