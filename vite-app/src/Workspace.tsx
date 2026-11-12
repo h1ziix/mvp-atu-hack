@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react"
-import { Leaf, LogOut } from "lucide-react"
+import { LogOut } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -40,11 +40,9 @@ export default function Workspace({
       <header className="border-b bg-background">
         <div className="mx-auto flex min-h-14 w-full max-w-[100rem] flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2 sm:px-6">
           <div className="flex min-w-0 items-center gap-2.5">
-            <span className="grid size-9 shrink-0 place-items-center rounded-md bg-primary text-primary-foreground">
-              <Leaf className="size-4" aria-hidden="true" />
-            </span>
+            <img src="/ecovision.svg" alt="" className="size-9 shrink-0" />
             <span className="text-sm leading-tight font-semibold">
-              АТУ · Экомониторинг
+              EcoVision · АТУ
             </span>
           </div>
           <div className="order-last flex w-full sm:order-none sm:w-auto">
@@ -128,7 +126,11 @@ export default function Workspace({
         </TabsContent>
         <TabsContent value="analytics">
           <Suspense fallback={<p role="status">Загрузка аналитики…</p>}>
-            <AnalyticsDashboard source={source} initialPeriod={initialPeriod} />
+            <AnalyticsDashboard
+              source={source}
+              initialPeriod={initialPeriod}
+              token={user.token}
+            />
           </Suspense>
         </TabsContent>
         <TabsContent value="reports">

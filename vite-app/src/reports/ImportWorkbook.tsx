@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { hasAiSession } from "@/lib/ai"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import {
   Table,
@@ -19,6 +20,7 @@ import { useReportingQuery } from "@/reporting/useReportingQuery"
 import { dateLabel, numberLabel } from "@/review/model"
 import type { ImportPreview } from "./excel"
 import { unitLabel } from "./model"
+import { PaperImport } from "./PaperImport"
 
 export function ImportWorkbook({
   operations,
@@ -32,7 +34,11 @@ export function ImportWorkbook({
     <Card size="sm">
       <CardHeader>
         <CardTitle>
-          <h2>Импорт старых таблиц</h2>
+          <h2>
+            {hasAiSession(token)
+              ? "Импорт таблиц и бланков"
+              : "Импорт старых таблиц"}
+          </h2>
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -40,7 +46,8 @@ export function ImportWorkbook({
           <ImportForm operations={operations} token={token} />
         ) : (
           <Button type="button" variant="outline" onClick={() => setOpen(true)}>
-            <Upload aria-hidden="true" /> Импортировать Excel
+            <Upload aria-hidden="true" />{" "}
+            {hasAiSession(token) ? "Открыть импорт" : "Импортировать Excel"}
           </Button>
         )}
       </CardContent>
@@ -279,6 +286,13 @@ function ImportForm({
                 Сохранить в черновики
               </Button>
             </div>
+          )}
+          {hasAiSession(token) && (
+            <PaperImport
+              catalog={catalog}
+              operations={operations}
+              token={token}
+            />
           )}
         </>
       )}

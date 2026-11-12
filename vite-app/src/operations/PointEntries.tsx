@@ -15,6 +15,7 @@ import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Skeleton } from "@/components/ui/skeleton"
+import { hasAiSession } from "@/lib/ai"
 import { currentMonth, monthRange } from "@/reporting/model"
 import { useReportingQuery } from "@/reporting/useReportingQuery"
 import {
@@ -25,6 +26,7 @@ import {
 } from "@/review/model"
 import { unitLabel } from "@/reports/model"
 import { today, type Operations, type Point, type PointMonth } from "./model"
+import { MeasurementAssistant } from "./MeasurementAssistant"
 
 const inputClass = "h-12 min-w-0 rounded-xl px-3 text-base md:text-base"
 const selectClass =
@@ -229,6 +231,23 @@ export function PointEntries({
             </CardHeader>
             <CardContent>
               <form className="space-y-3.5" onSubmit={add} aria-busy={busy}>
+                {hasAiSession(token) && (
+                  <MeasurementAssistant
+                    key={month}
+                    token={token}
+                    point={point}
+                    disabled={busy}
+                    onApply={(suggestion) => {
+                      if (!suggestion.wasteId) return
+                      if (suggestion.amount !== null)
+                        setAmount(String(suggestion.amount))
+                      else if (suggestion.wasteId !== wasteId) setAmount("")
+                      setWasteId(suggestion.wasteId)
+                      if (suggestion.disposalId)
+                        setDisposalId(suggestion.disposalId)
+                    }}
+                  />
+                )}
                 <Field className="gap-1.5">
                   <FieldLabel htmlFor="point-waste" className="text-sm">
                     Вид отходов

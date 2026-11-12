@@ -20,6 +20,7 @@ import { Field, FieldError, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Skeleton } from "@/components/ui/skeleton"
+import { hasAiSession } from "@/lib/ai"
 import {
   monthRange,
   quarterRange,
@@ -28,6 +29,7 @@ import {
 import { useReportingQuery } from "@/reporting/useReportingQuery"
 import { numberLabel, periodLabel } from "@/review/model"
 import { AnalyticsCharts } from "./AnalyticsCharts"
+import { AiRecommendations } from "./AiRecommendations"
 import { buildDashboard, getAnalyticsPeriod } from "./model"
 
 const tonsFormat = new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 5 })
@@ -45,9 +47,11 @@ function percent(value: number | null, signed = false) {
 export default function AnalyticsDashboard({
   source,
   initialPeriod,
+  token,
 }: {
   source: ReportingSource
   initialPeriod: string
+  token?: string
 }) {
   const [mode, setMode] = useState<"month" | "quarter">("month")
   const [period, setPeriod] = useState(() =>
@@ -207,6 +211,15 @@ export default function AnalyticsDashboard({
               : "К предыдущему месяцу"
           }
           showQuarterCoverage={period.mode === "quarter"}
+          ai={
+            hasAiSession(token) && (
+              <AiRecommendations
+                key={period.mode + period.fromMonth}
+                token={token}
+                period={period}
+              />
+            )
+          }
         />
       )}
     </section>
@@ -246,11 +259,13 @@ function DashboardResults({
   selectedPeriodLabel,
   comparisonLabel,
   showQuarterCoverage,
+  ai,
 }: {
   dashboard: ReturnType<typeof buildDashboard>
   selectedPeriodLabel: string
   comparisonLabel: string
   showQuarterCoverage: boolean
+  ai: ReactNode
 }) {
   const {
     metrics,
@@ -360,9 +375,9 @@ function DashboardResults({
               </p>
             ) : (
               <ul className="grid gap-2 lg:grid-cols-2">
-                {anomalies.map((anomaly, index) => (
+                {anomalies.map((anomaly) => (
                   <li
-                    key={`${anomaly.month}-${anomaly.organization}-${anomaly.waste}-${index}`}
+                    key={`${anomaly.month}-${anomaly.organizationId}-${anomaly.wasteId}`}
                   >
                     <Alert
                       role="note"
@@ -391,10 +406,11 @@ function DashboardResults({
         </Card>
       </section>
 
+      {ai}
       <section aria-labelledby="recommendations-title" className="space-y-3">
         <div>
           <h2 id="recommendations-title" className="text-lg font-semibold">
-            Рекомендации по подразделениям
+            Меры из справочника
           </h2>
           <p className="text-sm text-muted-foreground">
             По данным принятых отчётов и справочника способов утилизации.

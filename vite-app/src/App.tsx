@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState, type FormEvent } from "react"
-import { ArrowRight, CircleAlert, Info, Leaf } from "lucide-react"
+import { ArrowRight, CircleAlert, Info } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import {
@@ -12,11 +12,17 @@ import {
 } from "@/components/ui/card"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import {
+  browserSessionKey,
+  restoreWebSession,
+  useBrowserSession,
+} from "@/lib/browserSession"
 import { createDemoOperations } from "@/operations/demo"
 import { endSession, supabaseOperations } from "@/operations/supabase"
 import { createDemoSource, demoInspector, demoPeriod } from "./review/demo"
 import type { WorkspaceUser } from "./review/model"
 import {
+  restoreWorkspace,
   signInWorkspace,
   supabase,
   supabaseReviewSource,
@@ -28,19 +34,29 @@ const demoEnabled =
   import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEMO === "true"
 const Workspace = lazy(() => import("./Workspace"))
 const PointForm = lazy(() => import("@/operations/PointForm"))
+const restoreCabinet = (token: string) =>
+  supabase ? restoreWorkspace(supabase, token) : Promise.resolve(null)
+const restorePointProfile = (token: string) =>
+  supabase ? restoreWebSession(supabase, token) : Promise.resolve(null)
 
 export function App() {
-  const [user, setUser] = useState<WorkspaceUser | null>(null)
-  const [demo, setDemo] = useState(false)
+  const pointToken = new URLSearchParams(window.location.search).get("point")
+  const cabinet = useBrowserSession(
+    supabase && pointToken === null ? browserSessionKey("workspace") : null,
+    restoreCabinet
+  )
+  const [demoUser, setDemoUser] = useState<WorkspaceUser | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
   const [demoSource] = useState(() => (demoEnabled ? createDemoSource() : null))
   const [demoOperations] = useState(
     () => demoSource && createDemoOperations(demoSource)
   )
-  const source = demo ? demoSource : realSource
-  const operations = demo ? demoOperations : realOperations
-  const pointToken = new URLSearchParams(window.location.search).get("point")
+  const user =
+    demoUser ??
+    (cabinet.session.state === "signed-in" ? cabinet.session.value : null)
+  const source = demoUser ? demoSource : realSource
+  const operations = demoUser ? demoOperations : realOperations
 
   function closeSession(token?: string) {
     if (supabase && token && token !== "demo" && token !== "demo-point")
@@ -54,13 +70,12 @@ export function App() {
     setBusy(true)
     setError("")
     try {
-      setUser(
-        await signInWorkspace(
-          supabase,
-          String(form.get("email")).trim(),
-          String(form.get("password"))
-        )
+      const signedInUser = await signInWorkspace(
+        supabase,
+        String(form.get("email")).trim(),
+        String(form.get("password"))
       )
+      cabinet.remember(signedInUser, signedInUser.token)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Не удалось войти.")
     } finally {
@@ -77,6 +92,9 @@ export function App() {
             pointToken.startsWith("demo-") ? demoOperations : realOperations
           }
           onExit={closeSession}
+          restoreProfile={
+            !supabase || pointToken.startsWith("demo-") ? null : restorePointProfile
+          }
         />
       </Suspense>
     )
@@ -99,11 +117,13 @@ export function App() {
           user={user}
           onExit={() => {
             closeSession(user.token)
-            setUser(null)
-            setDemo(false)
+            if (demoUser) setDemoUser(null)
+            else cabinet.clear()
           }}
-          simulateSubmission={demo ? demoSource?.submitFromMobile : undefined}
-          initialPeriod={demo ? demoPeriod : undefined}
+          simulateSubmission={
+            demoUser ? demoSource?.submitFromMobile : undefined
+          }
+          initialPeriod={demoUser ? demoPeriod : undefined}
         />
       </Suspense>
     )
@@ -114,14 +134,12 @@ export function App() {
       <Card className="w-full max-w-md gap-6 py-6 [--card-spacing:--spacing(6)] sm:py-8 sm:[--card-spacing:--spacing(8)]">
         <CardHeader className="gap-2">
           <div className="mb-3 flex items-center gap-2 font-medium text-primary">
-            <span className="grid size-8 place-items-center rounded-md bg-primary/10">
-              <Leaf className="size-4" aria-hidden="true" />
-            </span>
-            АТУ · Экомониторинг
+            <img src="/ecovision.svg" alt="" className="size-8" />
+            EcoVision · АТУ
           </div>
           <CardTitle>
             <h1 className="text-2xl font-semibold tracking-tight">
-              Кабинет АТУ
+              Вход в кабинет
             </h1>
           </CardTitle>
           <CardDescription>
@@ -129,7 +147,26 @@ export function App() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {supabase ? (
+          {cabinet.session.state === "restoring" ? (
+            <p role="status" className="text-sm">
+              Восстанавливаем сессию…
+            </p>
+          ) : cabinet.session.state === "failed" ? (
+            <div className="space-y-3">
+              <Alert variant="destructive">
+                <CircleAlert aria-hidden="true" />
+                <AlertDescription>
+                  Не удалось проверить сохранённую сессию.
+                </AlertDescription>
+              </Alert>
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={cabinet.retry}>Повторить</Button>
+                <Button variant="outline" onClick={cabinet.clear}>
+                  Войти заново
+                </Button>
+              </div>
+            </div>
+          ) : supabase ? (
             <form onSubmit={signIn}>
               <FieldGroup className="gap-4">
                 <Field>
@@ -179,7 +216,7 @@ export function App() {
             </Alert>
           )}
         </CardContent>
-        {demoEnabled && (
+        {demoEnabled && cabinet.session.state === "signed-out" && (
           <CardFooter className="flex flex-col gap-2">
             <Button
               className="w-full"
@@ -188,8 +225,11 @@ export function App() {
               type="button"
               disabled={busy}
               onClick={() => {
-                setDemo(true)
-                setUser({ ...demoInspector, role: "inspector", token: "demo" })
+                setDemoUser({
+                  ...demoInspector,
+                  role: "inspector",
+                  token: "demo",
+                })
               }}
             >
               Открыть деморежим
@@ -200,8 +240,7 @@ export function App() {
               variant="ghost"
               disabled={busy}
               onClick={() => {
-                setDemo(true)
-                setUser({
+                setDemoUser({
                   id: "demo-admin",
                   name: "Демо-администратор",
                   role: "admin",

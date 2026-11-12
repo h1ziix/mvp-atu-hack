@@ -1,11 +1,16 @@
 import { useCallback, useState, type FormEvent } from "react"
-import { ArrowRight, Eye, EyeOff, Leaf, LogOut, MapPin } from "lucide-react"
+import { ArrowRight, Eye, EyeOff, LogOut, MapPin } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
+import {
+  browserSessionKey,
+  useBrowserSession,
+  type SessionProfile,
+} from "@/lib/browserSession"
 import { useReportingQuery } from "@/reporting/useReportingQuery"
 import type { Operations, Point } from "./model"
 import { PointEntries } from "./PointEntries"
@@ -14,10 +19,12 @@ export default function PointForm({
   operations,
   pointToken,
   onExit,
+  restoreProfile,
 }: {
   operations: Operations | null
   pointToken: string
   onExit: (token: string) => void
+  restoreProfile: ((token: string) => Promise<SessionProfile | null>) | null
 }) {
   const load = useCallback(() => {
     if (!operations)
@@ -29,8 +36,24 @@ export default function PointForm({
     return operations.point(pointToken)
   }, [operations, pointToken])
   const { result, reload } = useReportingQuery(load)
-  const [token, setToken] = useState("")
   const point = result.state === "ready" ? result.data : null
+  const organizationId = point?.organization.id
+  const restorePoint = useCallback(
+    async (savedToken: string) => {
+      const profile = await restoreProfile?.(savedToken)
+      return profile?.role === "responsible" &&
+        profile.organization_id === organizationId
+        ? savedToken
+        : null
+    },
+    [organizationId, restoreProfile]
+  )
+  const account = useBrowserSession(
+    restoreProfile ? browserSessionKey("point:" + pointToken) : null,
+    organizationId ? restorePoint : null
+  )
+  const token =
+    account.session.state === "signed-in" ? account.session.value : null
 
   return (
     <main className="min-h-svh bg-[#f2f4fa] px-3 pt-3 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-6 sm:pt-8 dark:bg-background">
@@ -46,10 +69,8 @@ export default function PointForm({
         >
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 text-sm font-semibold">
-              <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#d9dcff] text-[#242e7a]">
-                <Leaf className="size-[18px]" aria-hidden="true" />
-              </span>
-              АТУ · Экомониторинг
+              <img src="/ecovision.svg" alt="" className="size-9 shrink-0" />
+              EcoVision · АТУ
             </div>
             {token && (
               <Button
@@ -58,7 +79,7 @@ export default function PointForm({
                 className="h-11 gap-2 px-2.5 text-sm text-white hover:bg-white/10 hover:text-white"
                 onClick={() => {
                   onExit(token)
-                  setToken("")
+                  account.clear()
                 }}
               >
                 <LogOut aria-hidden="true" /> Выйти
@@ -100,13 +121,47 @@ export default function PointForm({
         )}
         {operations &&
           point &&
-          (token ? (
+          (account.session.state === "restoring" ||
+          account.session.state === "failed" ? (
+            <Card className="relative mx-2 -mt-7 rounded-2xl">
+              <CardContent className="space-y-3">
+                {account.session.state === "restoring" ? (
+                  <p role="status" className="text-sm">
+                    Восстанавливаем сессию…
+                  </p>
+                ) : (
+                  <>
+                    <Alert variant="destructive">
+                      <AlertDescription>
+                        Не удалось проверить сохранённую сессию.
+                      </AlertDescription>
+                    </Alert>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        className="h-11 px-4 text-sm"
+                        onClick={account.retry}
+                      >
+                        Повторить
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="h-11 px-4 text-sm"
+                        onClick={account.clear}
+                      >
+                        Войти заново
+                      </Button>
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          ) : token ? (
             <PointEntries operations={operations} point={point} token={token} />
           ) : (
             <PointSignIn
               operations={operations}
               point={point}
-              onSignIn={setToken}
+              onSignIn={(newToken) => account.remember(newToken, newToken)}
             />
           ))}
       </div>

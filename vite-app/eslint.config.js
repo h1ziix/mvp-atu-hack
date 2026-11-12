@@ -22,4 +22,8 @@ export default defineConfig([
       'react-refresh/only-export-components': 'off',
     },
   },
+  {
+    files: ['supabase/functions/**/*.ts'],
+    languageOptions: { globals: { Deno: 'readonly' } },
+  },
 ])

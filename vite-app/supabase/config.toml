@@ -1,0 +1,4 @@
+project_id = "atu-web"
+
+[functions.atu-ai]
+verify_jwt = false

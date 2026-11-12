@@ -3,6 +3,7 @@ import type { ImportCatalog, ImportRow } from "@/operations/model"
 import { today } from "@/operations/model"
 import { dateRange } from "@/reporting/model"
 import { reportTitle, unitLabel, type Summary } from "./model"
+import type { PaperRow } from "@/lib/ai"
 
 type Cell = string | number | null
 const headings = [
@@ -320,73 +321,106 @@ export async function parseImport(
     if (!lines.length) throw new Error("На листе нет строк для импорта.")
     if (lines.length > 2000)
       throw new Error("Разделите файл на части по 2000 строк.")
-    const rows: ImportRow[] = []
-    const errors: string[] = []
-    const maxDate = today()
-    for (const { cells, line } of lines) {
-      const date = dateCell(
-        cells[cols.date],
-        Boolean(book.Workbook?.WBProps?.date1904)
-      )
-      const org = key(cells[cols.organization])
-        ? lookup(catalog.organizations, cells[cols.organization])
-        : catalog.organizations.find((item) => item.id === defaultOrg)
-      const waste = lookup(catalog.wastes, cells[cols.waste])
-      const method = lookup(catalog.disposals, cells[cols.disposal])
-      const amount = Number(
-        String(cells[cols.amount] ?? "")
-          .trim()
-          .replace(/\s/g, "")
-          .replace(",", ".")
-      )
-      const unit = key(cells[cols.unit])
-      const issues: string[] = []
-      if (!dateRange(date, date) || date < "2000-01-01" || date > maxDate)
-        issues.push("неверная дата")
-      if (!org) issues.push("организация не найдена")
-      if (!waste) issues.push("вид отходов не найден")
-      if (!method) issues.push("способ утилизации не найден")
-      if (
-        !Number.isFinite(amount) ||
-        amount < 0.01 ||
-        amount > 2000 ||
-        Math.abs(Math.round(amount * 100) / 100 - amount) > 1e-9
-      )
-        issues.push(
-          "количество должно быть от 0,01 до 2000 с точностью до сотых"
-        )
-      if (
-        waste &&
-        unit &&
-        unit !== waste.unit &&
-        unit !== unitLabel(waste.unit)
-      )
-        issues.push("единица отличается от справочника")
-      if (
-        org &&
-        waste &&
-        !catalog.assignments.some(
-          (item) =>
-            item.organization_id === org.id && item.waste_type_id === waste.id
-        )
-      )
-        issues.push("этот вид отходов не назначен организации")
-      if (issues.length || !org || !waste || !method)
-        errors.push(`Строка ${line}: ${issues.join("; ")}.`)
-      else
-        rows.push({
-          line,
-          date,
-          organization_id: org.id,
-          waste_id: waste.id,
-          disposal_id: method.id,
-          amount,
-          unit: waste.unit,
-        })
-    }
+    const { rows, errors } = validateImportLines(
+      lines.map(({ cells, line }) => ({
+        line,
+        row: {
+          date: dateCell(
+            cells[cols.date],
+            Boolean(book.Workbook?.WBProps?.date1904)
+          ),
+          organization: key(cells[cols.organization]),
+          waste: key(cells[cols.waste]),
+          amount: key(cells[cols.amount]),
+          unit: key(cells[cols.unit]),
+          disposal: key(cells[cols.disposal]),
+        },
+      })),
+      catalog,
+      defaultOrg
+    )
     return { rows, errors, fileName: file.name, sheetName: name }
   }
   throw new Error(
     "Не найден лист с колонками «Дата», «Вид отходов», «Количество» и «Способ утилизации». Используйте шаблон АТУ."
+  )
+}
+
+type ImportLine = { line: number; row: PaperRow & { organization?: string } }
+
+function validateImportLines(
+  lines: ImportLine[],
+  catalog: ImportCatalog,
+  defaultOrg: string
+) {
+  const rows: ImportRow[] = []
+  const errors: string[] = []
+  const maxDate = today()
+  for (const { row, line } of lines) {
+    const date = row.date
+    const org = key(row.organization)
+      ? lookup(catalog.organizations, row.organization)
+      : catalog.organizations.find((item) => item.id === defaultOrg)
+    const waste = lookup(catalog.wastes, row.waste)
+    const method = lookup(catalog.disposals, row.disposal)
+    const amount = Number(
+      String(row.amount ?? "")
+        .trim()
+        .replace(/\s/g, "")
+        .replace(",", ".")
+    )
+    const unit = key(row.unit)
+    const issues: string[] = []
+    if (!dateRange(date, date) || date < "2000-01-01" || date > maxDate)
+      issues.push("неверная дата")
+    if (!org) issues.push("организация не найдена")
+    if (!waste) issues.push("вид отходов не найден")
+    if (!method) issues.push("способ утилизации не найден")
+    if (
+      !Number.isFinite(amount) ||
+      amount < 0.01 ||
+      amount > 2000 ||
+      Math.abs(Math.round(amount * 100) / 100 - amount) > 1e-9
+    )
+      issues.push("количество должно быть от 0,01 до 2000 с точностью до сотых")
+    if (waste && unit && unit !== waste.unit && unit !== unitLabel(waste.unit))
+      issues.push("единица отличается от справочника")
+    if (
+      org &&
+      waste &&
+      !catalog.assignments.some(
+        (item) =>
+          item.organization_id === org.id && item.waste_type_id === waste.id
+      )
+    )
+      issues.push("этот вид отходов не назначен организации")
+    if (issues.length || !org || !waste || !method)
+      errors.push(`Строка ${line}: ${issues.join("; ")}.`)
+    else
+      rows.push({
+        line,
+        date,
+        organization_id: org.id,
+        waste_id: waste.id,
+        disposal_id: method.id,
+        amount,
+        unit: waste.unit,
+      })
+  }
+  return { rows, errors }
+}
+
+export function validatePaperRows(
+  rows: PaperRow[],
+  catalog: ImportCatalog,
+  organizationId: string
+) {
+  return validateImportLines(
+    rows.map((row, index) => ({
+      line: index + 1,
+      row: { ...row, date: dateCell(row.date, false) },
+    })),
+    catalog,
+    organizationId
   )
 }

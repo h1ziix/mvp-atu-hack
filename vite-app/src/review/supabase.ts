@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js"
+import { restoreWebSession } from "@/lib/browserSession"
 import type { AnalyticsRecord } from "@/analytics/model"
 import type { WorkspaceSource } from "@/reporting/model"
 import {
@@ -172,16 +173,22 @@ export async function signInWorkspace(
       "Не удалось войти. Проверьте подключение к системе и попробуйте снова."
     )
   const profile = row(data)
-  const id = text(profile.id)
-  if (!id) throw new Error("Проверьте почту и пароль.")
-  const { role } = profile
-  if (role !== "inspector" && role !== "management" && role !== "admin") {
+  if (!text(profile.id)) throw new Error("Проверьте почту и пароль.")
+  const user = workspaceUser(profile, text(profile.token) || undefined)
+  if (!user) {
     if (profile.token)
       await client.rpc("w4_sign_out", { p_token: profile.token })
     throw new Error("Ответственные входят по ссылке своей точки.")
   }
+  return user
+}
+
+function workspaceUser(profile: Row, token?: string): WorkspaceUser | null {
+  const { role } = profile
+  if (role !== "inspector" && role !== "management" && role !== "admin")
+    return null
   return {
-    id,
+    id: text(profile.id),
     name:
       profileName(profile) ||
       (role === "inspector"
@@ -190,8 +197,13 @@ export async function signInWorkspace(
           ? "Администратор"
           : "Руководство"),
     role,
-    token: text(profile.token) || undefined,
+    token,
   }
+}
+
+export async function restoreWorkspace(client: SupabaseClient, token: string) {
+  const profile = await restoreWebSession(client, token)
+  return profile ? workspaceUser(profile, token) : null
 }
 
 export function supabaseReviewSource(client: SupabaseClient): WorkspaceSource {
