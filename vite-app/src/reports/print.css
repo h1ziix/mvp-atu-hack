@@ -1,0 +1,77 @@
+.atu-print {
+  display: none;
+}
+.atu-summary-table th,
+.atu-summary-table td {
+  padding: 0.5rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.atu-summary-table th {
+  font-weight: 600;
+}
+.atu-summary-table thead,
+.atu-summary-table .subtotal {
+  background: var(--muted);
+}
+.atu-summary-table .numeric {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.atu-summary-table .grand-total {
+  font-weight: 700;
+}
+@media screen {
+  .atu-summary-table {
+    min-width: 55rem;
+  }
+}
+@media print {
+  @page atu-report {
+    size: A4 landscape;
+    margin: 12mm;
+  }
+  body:has(> .atu-print) > #root {
+    display: none !important;
+  }
+  body > .atu-print {
+    display: block;
+    page: atu-report;
+    color: #111;
+    background: white;
+    font:
+      10pt/1.4 Arial,
+      sans-serif;
+  }
+  .atu-print header {
+    margin-bottom: 5mm;
+  }
+  .atu-print h1 {
+    margin: 2mm 0;
+    font-size: 16pt;
+    font-weight: 700;
+  }
+  .atu-print table {
+    font-size: 9pt;
+  }
+  .atu-print thead {
+    display: table-header-group;
+  }
+  .atu-print tr {
+    break-inside: avoid;
+  }
+  .atu-print th,
+  .atu-print td {
+    border: 1px solid #aaa;
+    padding: 1.8mm;
+  }
+  .atu-print .subtotal {
+    background: #eee;
+    print-color-adjust: exact;
+  }
+  .atu-signature {
+    break-inside: avoid;
+    margin-top: 7mm;
+  }
+}
